@@ -139,6 +139,65 @@ def pull_image(
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 
+@router.get("/{image_id}")
+def get_image(
+    podman_client: Annotated[PodmanClient, Depends(get_podman_client)],
+    image_id: str,
+) -> ImageModel:
+    """
+    Get an image by its ID.
+
+    This endpoint retrieves details of a specific image identified by its ID.
+
+    Returns an image object with details including ID, repository, tag, and registry.
+    """
+    try:
+        # Get the image by ID
+        image = podman_client.images.get(image_id)
+
+        # If the image has tags, use the first tag to create the ImageModel
+        if hasattr(image, "tags") and image.tags:
+            tag = image.tags[0]
+
+            # Parse the tag string to extract registry, repository, and tag
+            parts = tag.split("/")
+            if ":" in parts[-1]:
+                repo_and_tag = parts[-1].split(":")
+                repository = repo_and_tag[0]
+                tag_value = repo_and_tag[1]
+            else:
+                repository = parts[-1]
+                tag_value = None
+
+            # Determine the registry (everything before the repository)
+            registry = None
+            if len(parts) > 1:
+                registry = "/".join(parts[:-1])
+
+            return ImageModel(
+                id=image.id,
+                repository=repository,
+                tag=tag_value,
+                registry=registry,
+                full_name=tag,
+            )
+        # If the image has no tags, create an ImageModel with just the ID
+        else:
+            return ImageModel(
+                id=image.id,
+                repository="<none>",
+                tag=None,
+                registry=None,
+                full_name=image.id,
+            )
+    except ImageNotFound:
+        raise HTTPException(status_code=404, detail=f"Image {image_id} not found")
+    except APIError as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving image: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
 @router.delete("/{image_id}")
 def delete_image(
     podman_client: Annotated[PodmanClient, Depends(get_podman_client)],

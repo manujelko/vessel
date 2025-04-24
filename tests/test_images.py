@@ -428,3 +428,135 @@ def test_delete_image_api_error() -> None:
     finally:
         # Clean up the dependency override
         app.dependency_overrides.pop(get_podman_client)
+
+
+def test_get_image_with_tags() -> None:
+    # Create a mock image with tags
+    mock_image = MagicMock()
+    mock_image.tags = ["registry.example.com/image1:latest"]
+    mock_image.id = "image1_id"
+
+    # Create a mock for the Podman client
+    mock_client = MagicMock()
+    mock_client.images.get.return_value = mock_image
+
+    # Override the dependency to use our mock
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+
+    # Image ID to get
+    image_id = "image1_id"
+
+    # Expected response
+    expected_response = {
+        "id": "image1_id",
+        "repository": "image1",
+        "tag": "latest",
+        "registry": "registry.example.com",
+        "full_name": "registry.example.com/image1:latest",
+    }
+
+    try:
+        # Make the request to the endpoint
+        response = client.get(f"/api/images/{image_id}")
+
+        # Verify the response
+        assert response.status_code == 200
+        assert response.json() == expected_response
+
+        # Verify that the mock was called correctly
+        mock_client.images.get.assert_called_with(image_id)
+    finally:
+        # Clean up the dependency override
+        app.dependency_overrides.pop(get_podman_client)
+
+
+def test_get_image_without_tags() -> None:
+    # Create a mock image without tags
+    mock_image = MagicMock()
+    mock_image.tags = []
+    mock_image.id = "image3_id"
+
+    # Create a mock for the Podman client
+    mock_client = MagicMock()
+    mock_client.images.get.return_value = mock_image
+
+    # Override the dependency to use our mock
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+
+    # Image ID to get
+    image_id = "image3_id"
+
+    # Expected response
+    expected_response = {
+        "id": "image3_id",
+        "repository": "<none>",
+        "tag": None,
+        "registry": None,
+        "full_name": "image3_id",
+    }
+
+    try:
+        # Make the request to the endpoint
+        response = client.get(f"/api/images/{image_id}")
+
+        # Verify the response
+        assert response.status_code == 200
+        assert response.json() == expected_response
+
+        # Verify that the mock was called correctly
+        mock_client.images.get.assert_called_with(image_id)
+    finally:
+        # Clean up the dependency override
+        app.dependency_overrides.pop(get_podman_client)
+
+
+def test_get_image_not_found() -> None:
+    # Create a mock for the Podman client
+    mock_client = MagicMock()
+    mock_client.images.get.side_effect = ImageNotFound("Image not found")
+
+    # Override the dependency to use our mock
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+
+    # Nonexistent image ID
+    image_id = "nonexistentimageidentifier"
+
+    try:
+        # Make the request to the endpoint
+        response = client.get(f"/api/images/{image_id}")
+
+        # Verify the response
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"]
+
+        # Verify that the mock was called correctly
+        mock_client.images.get.assert_called_with(image_id)
+    finally:
+        # Clean up the dependency override
+        app.dependency_overrides.pop(get_podman_client)
+
+
+def test_get_image_api_error() -> None:
+    # Create a mock for the Podman client
+    mock_client = MagicMock()
+    mock_client.images.get.side_effect = APIError("API error occurred")
+
+    # Override the dependency to use our mock
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+
+    # Image ID that will cause an API error
+    image_id = "image_with_api_error"
+
+    try:
+        # Make the request to the endpoint
+        response = client.get(f"/api/images/{image_id}")
+
+        # Verify the response
+        assert response.status_code == 500
+        assert "Error retrieving image" in response.json()["detail"]
+
+        # Verify that the mock was called correctly
+        mock_client.images.get.assert_called_with(image_id)
+    finally:
+        # Clean up the dependency override
+        app.dependency_overrides.pop(get_podman_client)
