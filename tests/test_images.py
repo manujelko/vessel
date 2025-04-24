@@ -27,12 +27,36 @@ def test_get_images() -> None:
 
     mock_images = [mock_image1, mock_image2, mock_image3]
 
-    # Expected response - a list of strings identifying each image
+    # Expected response - a list of ImageModel objects
     expected_response = [
-        "registry.example.com/image1:latest",
-        "registry.example.com/image2:v1.0",
-        "registry.example.com/image2:latest",
-        "image3_id",
+        {
+            "id": "image1_id",
+            "repository": "image1",
+            "tag": "latest",
+            "registry": "registry.example.com",
+            "full_name": "registry.example.com/image1:latest",
+        },
+        {
+            "id": "image2_id",
+            "repository": "image2",
+            "tag": "v1.0",
+            "registry": "registry.example.com",
+            "full_name": "registry.example.com/image2:v1.0",
+        },
+        {
+            "id": "image2_id",
+            "repository": "image2",
+            "tag": "latest",
+            "registry": "registry.example.com",
+            "full_name": "registry.example.com/image2:latest",
+        },
+        {
+            "id": "image3_id",
+            "repository": "<none>",
+            "tag": None,
+            "registry": None,
+            "full_name": "image3_id",
+        },
     ]
 
     # Create a mock for the Podman client
@@ -281,6 +305,126 @@ def test_pull_image_login_error() -> None:
             username="testuser", password="testpass", registry="docker.io"
         )
         mock_client.images.pull.assert_not_called()
+    finally:
+        # Clean up the dependency override
+        app.dependency_overrides.pop(get_podman_client)
+
+
+def test_delete_image_success() -> None:
+    # Create a mock for the Podman client
+    mock_client = MagicMock()
+    mock_client.images.remove.return_value = [
+        {
+            "Deleted": "sha256:a1801b843b1bfaf77c501e7a6d3f709401a1e0c83863037fa3aab063a7fdb9dc"
+        },
+        {"Untagged": "nginx:latest"},
+        {"ExitCode": 0},
+    ]
+
+    # Override the dependency to use our mock
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+
+    # Image ID to delete
+    image_id = "sha256:a1801b843b1bfaf77c501e7a6d3f709401a1e0c83863037fa3aab063a7fdb9dc"
+
+    try:
+        # Make the request to the endpoint
+        response = client.delete(f"/api/images/{image_id}")
+
+        # Verify the response
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+        assert response.json()["message"] == f"Image {image_id} deleted successfully"
+        assert "details" in response.json()
+
+        # Verify that the mock was called correctly
+        mock_client.images.remove.assert_called_with(image=image_id, force=False)
+    finally:
+        # Clean up the dependency override
+        app.dependency_overrides.pop(get_podman_client)
+
+
+def test_delete_image_force() -> None:
+    # Create a mock for the Podman client
+    mock_client = MagicMock()
+    mock_client.images.remove.return_value = [
+        {
+            "Deleted": "sha256:a1801b843b1bfaf77c501e7a6d3f709401a1e0c83863037fa3aab063a7fdb9dc"
+        },
+        {"Untagged": "nginx:latest"},
+        {"ExitCode": 0},
+    ]
+
+    # Override the dependency to use our mock
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+
+    # Image ID to delete
+    image_id = "sha256:a1801b843b1bfaf77c501e7a6d3f709401a1e0c83863037fa3aab063a7fdb9dc"
+
+    try:
+        # Make the request to the endpoint with force=true
+        response = client.delete(f"/api/images/{image_id}?force=true")
+
+        # Verify the response
+        assert response.status_code == 200
+        assert response.json()["status"] == "success"
+        assert response.json()["message"] == f"Image {image_id} deleted successfully"
+        assert "details" in response.json()
+
+        # Verify that the mock was called correctly with force=True
+        mock_client.images.remove.assert_called_with(image=image_id, force=True)
+    finally:
+        # Clean up the dependency override
+        app.dependency_overrides.pop(get_podman_client)
+
+
+def test_delete_image_not_found() -> None:
+    # Create a mock for the Podman client
+    mock_client = MagicMock()
+    mock_client.images.remove.side_effect = ImageNotFound("Image not found")
+
+    # Override the dependency to use our mock
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+
+    # Nonexistent image ID
+    image_id = "sha256:nonexistentimageidentifier"
+
+    try:
+        # Make the request to the endpoint
+        response = client.delete(f"/api/images/{image_id}")
+
+        # Verify the response
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"]
+
+        # Verify that the mock was called correctly
+        mock_client.images.remove.assert_called_with(image=image_id, force=False)
+    finally:
+        # Clean up the dependency override
+        app.dependency_overrides.pop(get_podman_client)
+
+
+def test_delete_image_api_error() -> None:
+    # Create a mock for the Podman client
+    mock_client = MagicMock()
+    mock_client.images.remove.side_effect = APIError("Cannot delete image in use")
+
+    # Override the dependency to use our mock
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+
+    # Image ID that will cause an API error
+    image_id = "sha256:a1801b843b1bfaf77c501e7a6d3f709401a1e0c83863037fa3aab063a7fdb9dc"
+
+    try:
+        # Make the request to the endpoint
+        response = client.delete(f"/api/images/{image_id}")
+
+        # Verify the response
+        assert response.status_code == 500
+        assert "Error deleting image" in response.json()["detail"]
+
+        # Verify that the mock was called correctly
+        mock_client.images.remove.assert_called_with(image=image_id, force=False)
     finally:
         # Clean up the dependency override
         app.dependency_overrides.pop(get_podman_client)
