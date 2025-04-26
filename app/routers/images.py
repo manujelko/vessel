@@ -8,7 +8,7 @@ router = APIRouter(prefix="/images", tags=["images"])
 
 
 @router.get("")
-def get_images(
+def get(
     podman_client: Annotated[PodmanClient, Depends(get_podman_client)],
 ) -> list[str]:
     """
@@ -32,7 +32,7 @@ def get_images(
 
 
 @router.post("/pull")
-def pull_image(
+def pull(
     podman_client: Annotated[PodmanClient, Depends(get_podman_client)],
     image_name: str = Body(..., description="Image name to pull", embed=True),
 ) -> dict[str, str]:
@@ -73,7 +73,7 @@ def pull_image(
 
 
 @router.delete("/{image_name:path}", status_code=204)
-def delete_image(
+def delete(
     podman_client: Annotated[PodmanClient, Depends(get_podman_client)],
     image_name: str,
     force: bool = False,
