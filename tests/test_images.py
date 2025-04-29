@@ -1,3 +1,4 @@
+import datetime as dt
 from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
@@ -5,6 +6,7 @@ from podman.errors import APIError, ImageNotFound
 
 from app.dependencies import get_podman_client
 from app.main import app
+from app.models import Image
 
 client = TestClient(app)
 
@@ -12,28 +14,115 @@ client = TestClient(app)
 def test_get_images() -> None:
     # Create mock image objects with tags property
     mock_image1 = MagicMock()
-    mock_image1.tags = ["registry.example.com/image1:latest"]
-    mock_image1.id = "image1_id"
+    mock_image1.attrs = {
+        "Arch": "arm64",
+        "Containers": 4,
+        "Created": 1716689914,
+        "Digest": "sha256:41316c18917a27a359ee3191fd8f43559d30592f82a144bbc59d9d44790f6e7a",
+        "History": ["quay.io/podman/hello:latest"],
+        "Id": "83fc7ce1224f5ed3885f6aaec0bb001c0bbb2a308e3250d7408804a720c72a32",
+        "IsManifestList": False,
+        "Labels": {
+            "artist": "Máirín Ní Ḋuḃṫaiġ, X/Twitter:@mairin",
+            "io.buildah.version": "1.23.1",
+            "io.containers.capabilities": "sys_chroot",
+            "maintainer": "Podman Maintainers",
+            "org.opencontainers.image.description": "Hello world image with ascii art",
+            "org.opencontainers.image.documentation": "https://github.com/containers/PodmanHello/blob/76b262056eae09851d0a952d0f42b5bbeedde471/README.md",
+            "org.opencontainers.image.revision": "76b262056eae09851d0a952d0f42b5bbeedde471",
+            "org.opencontainers.image.source": "https://raw.githubusercontent.com/containers/PodmanHello/76b262056eae09851d0a952d0f42b5bbeedde471/Containerfile",
+            "org.opencontainers.image.title": "hello image",
+            "org.opencontainers.image.url": "https://github.com/containers/PodmanHello/actions/runs/9239934617",
+        },
+        "Names": ["quay.io/podman/hello:latest"],
+        "Os": "linux",
+        "ParentId": "",
+        "RepoDigests": [
+            "quay.io/podman/hello@sha256:41316c18917a27a359ee3191fd8f43559d30592f82a144bbc59d9d44790f6e7a",
+            "quay.io/podman/hello@sha256:5c44ef36dc5e35a76904da0e028cf9413e0176a653525162368af13fed03571c",
+        ],
+        "RepoTags": ["quay.io/podman/hello:latest"],
+        "SharedSize": 0,
+        "Size": 579593,
+        "VirtualSize": 579593,
+    }
 
     mock_image2 = MagicMock()
-    mock_image2.tags = [
-        "registry.example.com/image2:v1.0",
-        "registry.example.com/image2:latest",
-    ]
-    mock_image2.id = "image2_id"
+    mock_image2.attrs = {
+        "Arch": "arm64",
+        "Containers": 0,
+        "Created": 1624422849,
+        "Digest": "sha256:47ae43cdfc7064d28800bc42e79a429540c7c80168e8c8952778c0d5af1c09db",
+        "History": ["docker.io/library/nginx:1.21.0"],
+        "Id": "d868a2ccd9b148b984a40e49ab0b16e1434d5bca8f0bf8f2714ce7352c3d4555",
+        "IsManifestList": False,
+        "Labels": {"maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"},
+        "Names": ["docker.io/library/nginx:1.21.0"],
+        "Os": "linux",
+        "ParentId": "",
+        "RepoDigests": [
+            "docker.io/library/nginx@sha256:47ae43cdfc7064d28800bc42e79a429540c7c80168e8c8952778c0d5af1c09db",
+            "docker.io/library/nginx@sha256:7c91baa42a9371c925b909701b84ee543aa2d6e9fda4543225af2e17f531a243",
+        ],
+        "RepoTags": ["docker.io/library/nginx:1.21.0"],
+        "SharedSize": 0,
+        "Size": 130092990,
+        "VirtualSize": 130092990,
+    }
 
-    mock_image3 = MagicMock()
-    mock_image3.tags = []
-    mock_image3.id = "image3_id"
-
-    mock_images = [mock_image1, mock_image2, mock_image3]
+    mock_images = [mock_image1, mock_image2]
 
     # Expected response - a list of image names
+    expected_image_model1 = Image(
+        id="83fc7ce1224f5ed3885f6aaec0bb001c0bbb2a308e3250d7408804a720c72a32",
+        parent_id="",
+        repo_tags=["quay.io/podman/hello:latest"],
+        repo_digests=None,
+        created=dt.datetime(2024, 5, 26, 3, 18, 34),
+        size=579593,
+        shared_size=0,
+        virtual_size=579593,
+        labels={
+            "artist": "Máirín Ní Ḋuḃṫaiġ, X/Twitter:@mairin",
+            "io.buildah.version": "1.23.1",
+            "io.containers.capabilities": "sys_chroot",
+            "maintainer": "Podman Maintainers",
+            "org.opencontainers.image.description": "Hello world image with ascii art",
+            "org.opencontainers.image.documentation": "https://github.com/containers/PodmanHello/blob/76b262056eae09851d0a952d0f42b5bbeedde471/README.md",
+            "org.opencontainers.image.revision": "76b262056eae09851d0a952d0f42b5bbeedde471",
+            "org.opencontainers.image.source": "https://raw.githubusercontent.com/containers/PodmanHello/76b262056eae09851d0a952d0f42b5bbeedde471/Containerfile",
+            "org.opencontainers.image.title": "hello image",
+            "org.opencontainers.image.url": "https://github.com/containers/PodmanHello/actions/runs/9239934617",
+        },
+        containers=4,
+        architecture="arm64",
+        os="linux",
+        digest="sha256:41316c18917a27a359ee3191fd8f43559d30592f82a144bbc59d9d44790f6e7a",
+        history=["quay.io/podman/hello:latest"],
+        is_manifest_list=False,
+        names=["quay.io/podman/hello:latest"],
+    )
+    expected_image_model2 = Image(
+        id="d868a2ccd9b148b984a40e49ab0b16e1434d5bca8f0bf8f2714ce7352c3d4555",
+        parent_id="",
+        repo_tags=["docker.io/library/nginx:1.21.0"],
+        repo_digests=None,
+        created=dt.datetime(2021, 6, 23, 5, 34, 9),
+        size=130092990,
+        shared_size=0,
+        virtual_size=130092990,
+        labels={"maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"},
+        containers=0,
+        architecture="arm64",
+        os="linux",
+        digest="sha256:47ae43cdfc7064d28800bc42e79a429540c7c80168e8c8952778c0d5af1c09db",
+        history=["docker.io/library/nginx:1.21.0"],
+        is_manifest_list=False,
+        names=["docker.io/library/nginx:1.21.0"],
+    )
     expected_response = [
-        "registry.example.com/image1:latest",
-        "registry.example.com/image2:v1.0",
-        "registry.example.com/image2:latest",
-        "image3_id",
+        expected_image_model1.model_dump(mode="json"),
+        expected_image_model2.model_dump(mode="json"),
     ]
 
     # Create a mock for the Podman client

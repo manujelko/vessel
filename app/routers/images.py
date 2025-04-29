@@ -1,3 +1,4 @@
+import datetime as dt
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
@@ -5,6 +6,7 @@ from podman import PodmanClient
 from podman.errors import APIError, ImageNotFound
 
 from app.dependencies import get_podman_client
+from app.models import Image
 
 router = APIRouter(prefix="/images", tags=["images"])
 
@@ -12,25 +14,30 @@ router = APIRouter(prefix="/images", tags=["images"])
 @router.get("")
 def get_images(
     podman_client: Annotated[PodmanClient, Depends(get_podman_client)],
-) -> list[str]:
-    """
-    Get a list of all images.
-
-    Returns a list of image names (strings) that fully identify each image.
-    """
-    images = podman_client.images.list()
-    result = []
-
-    for image in images:
-        # If the image has tags, add each tag to the result
-        if hasattr(image, "tags") and image.tags:
-            for tag in image.tags:
-                result.append(tag)
-        # If the image has no tags, use the image ID
-        else:
-            result.append(image.id)
-
-    return result
+) -> list[Image]:
+    """Get a list of all images."""
+    results = []
+    for image in podman_client.images.list():
+        attrs = image.attrs
+        image_model = Image(
+            id=attrs["Id"],
+            parent_id=attrs.get("ParentId"),
+            repo_tags=attrs.get("RepoTags", []),
+            created=dt.datetime.fromtimestamp(attrs["Created"]),
+            size=attrs["Size"],
+            shared_size=attrs.get("SharedSize"),
+            virtual_size=attrs.get("VirtualSize"),
+            labels=attrs.get("Labels"),
+            containers=attrs.get("Containers"),
+            architecture=attrs.get("Arch"),
+            os=attrs.get("Os"),
+            digest=attrs.get("Digest"),
+            history=attrs.get("History"),
+            is_manifest_list=attrs.get("IsManifestList"),
+            names=attrs.get("Names"),
+        )
+        results.append(image_model)
+    return results
 
 
 @router.post("/pull", status_code=status.HTTP_204_NO_CONTENT)
