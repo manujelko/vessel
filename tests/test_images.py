@@ -1,9 +1,10 @@
 from unittest.mock import MagicMock
+
 from fastapi.testclient import TestClient
 from podman.errors import APIError, ImageNotFound
 
-from app.main import app
 from app.dependencies import get_podman_client
+from app.main import app
 
 client = TestClient(app)
 
@@ -75,11 +76,8 @@ def test_pull_image_success() -> None:
         )
 
         # Verify the response
-        assert response.status_code == 200
-        assert response.json() == {
-            "status": "success",
-            "message": "Image nginx:latest pulled successfully",
-        }
+        assert response.status_code == 204
+        assert response.content == b""  # Empty response body
 
         # Verify that the mock methods were called correctly
         mock_client.images.pull.assert_called_with("nginx:latest")
@@ -165,11 +163,8 @@ def test_pull_image_with_custom_registry() -> None:
         )
 
         # Verify the response
-        assert response.status_code == 200
-        assert response.json() == {
-            "status": "success",
-            "message": "Image registry.example.com/myapp:latest pulled successfully",
-        }
+        assert response.status_code == 204
+        assert response.content == b""  # Empty response body
 
         # Verify that the mock methods were called correctly
         mock_client.images.pull.assert_called_with("registry.example.com/myapp:latest")

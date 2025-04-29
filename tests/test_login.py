@@ -1,9 +1,10 @@
 from unittest.mock import MagicMock
+
 from fastapi.testclient import TestClient
 from podman.errors import APIError
 
-from app.main import app
 from app.dependencies import get_podman_client
+from app.main import app
 
 client = TestClient(app)
 

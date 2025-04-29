@@ -1,8 +1,10 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, Body
-from app.dependencies import get_podman_client
+
+from fastapi import APIRouter, Body, Depends, HTTPException
 from podman import PodmanClient
 from podman.errors import APIError
+
+from app.dependencies import get_podman_client
 
 router = APIRouter(prefix="/login", tags=["login"])
 
@@ -38,7 +40,6 @@ def login_repository(
     ```
     """
     try:
-        # Login to the registry
         result = podman_client.login(
             username=username, password=password, registry=registry
         )
@@ -48,7 +49,7 @@ def login_repository(
             "message": f"Successfully logged in to {registry}",
             "details": result,
         }
-    except APIError as e:
-        raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+    except APIError:
+        raise HTTPException(status_code=401, detail="Authentication failed")
+    except Exception:
+        raise HTTPException(status_code=500, detail="Unexpected error")

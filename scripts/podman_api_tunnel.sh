@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# This script is used when developing on macOS.
+# It starts the podman service inside of the podman machine,
+# and it exposes the service on http://localhost:8080 on the host.
+
 set -e
 
 # Configuration

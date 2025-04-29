@@ -1,14 +1,16 @@
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, Body
-from app.dependencies import get_podman_client
+
+from fastapi import APIRouter, Body, Depends, HTTPException, status
 from podman import PodmanClient
 from podman.errors import APIError, ImageNotFound
+
+from app.dependencies import get_podman_client
 
 router = APIRouter(prefix="/images", tags=["images"])
 
 
 @router.get("")
-def get(
+def get_images(
     podman_client: Annotated[PodmanClient, Depends(get_podman_client)],
 ) -> list[str]:
     """
@@ -31,11 +33,11 @@ def get(
     return result
 
 
-@router.post("/pull")
-def pull(
+@router.post("/pull", status_code=status.HTTP_204_NO_CONTENT)
+def pull_image(
     podman_client: Annotated[PodmanClient, Depends(get_podman_client)],
     image_name: str = Body(..., description="Image name to pull", embed=True),
-) -> dict[str, str]:
+) -> None:
     """
     Pull an image from a registry.
 
@@ -59,11 +61,7 @@ def pull(
     try:
         # Pull the image
         _ = podman_client.images.pull(image_name)
-
-        return {
-            "status": "success",
-            "message": f"Image {image_name} pulled successfully",
-        }
+        return None
     except ImageNotFound:
         raise HTTPException(status_code=404, detail=f"Image {image_name} not found")
     except APIError as e:
@@ -73,7 +71,7 @@ def pull(
 
 
 @router.delete("/{image_name:path}", status_code=204)
-def delete(
+def delete_image(
     podman_client: Annotated[PodmanClient, Depends(get_podman_client)],
     image_name: str,
     force: bool = False,
@@ -87,9 +85,7 @@ def delete(
     Returns a 204 No Content status code on success.
     """
     try:
-        # Remove the image
         podman_client.images.remove(image=image_name, force=force)
-        # Return None (which FastAPI converts to a 204 No Content response)
         return None
     except ImageNotFound:
         raise HTTPException(status_code=404, detail=f"Image {image_name} not found")
