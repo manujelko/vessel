@@ -1,4 +1,5 @@
 import datetime as dt
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
@@ -7,6 +8,8 @@ from podman.errors import APIError, ImageNotFound
 
 from app.dependencies import get_podman_client
 from app.models import Image
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/images", tags=["images"])
 
@@ -58,7 +61,7 @@ def pull_image(
     }
     ```
 
-    Example with custom registry:
+    Example with a custom registry:
     ```JSON
     {
       "image_name": "registry.example.com/myapp:1.0"
@@ -66,37 +69,72 @@ def pull_image(
     ```
     """
     try:
-        # Pull the image
-        _ = podman_client.images.pull(image_name)
+        podman_client.images.pull(image_name)
+        logger.info("Image %s pulled successfully", image_name)
         return None
     except ImageNotFound:
+        logger.exception("Image not found")
         raise HTTPException(status_code=404, detail=f"Image {image_name} not found")
-    except APIError as e:
-        raise HTTPException(status_code=500, detail=f"Error pulling image: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+    except APIError:
+        logger.exception("Error pulling image")
+        raise HTTPException(status_code=500, detail="Error pulling image")
+    except Exception:
+        logger.exception("Unexpected error")
+        raise HTTPException(status_code=500, detail="Unexpected error")
 
 
-@router.delete("/{image_name:path}", status_code=204)
+@router.delete("", status_code=204)
 def delete_image(
     podman_client: Annotated[PodmanClient, Depends(get_podman_client)],
-    image_name: str,
+    image_id: str | None = None,
+    image_name: str | None = None,
     force: bool = False,
 ) -> None:
     """
-    Delete an image from the local storage by its name.
+    Delete an image from the local storage by its name or id.
 
-    This endpoint removes an image from the local storage. The image must be specified by its name.
+    This endpoint removes an image from the local storage. The image must be specified by its name or id.
     If the image is in use by a container, the deletion will fail unless the 'force' parameter is set to true.
 
     Returns a 204 No Content status code on success.
     """
+
+    match (image_id, image_name):
+        case (None, None):
+            logger.warning("Either image_id or image_name must be provided")
+            raise HTTPException(
+                status_code=400, detail="Either image_id or image_name must be provided"
+            )
+        case (None, str()):
+            logger.info("Deleting image by name: %s", image_name)
+            identifier = image_name
+        case (str(), None):
+            logger.info("Deleting image by id: %s", image_id)
+            identifier = image_id
+        case (str(), str()):
+            logger.warning("Either image_id or image_name must be provided, not both")
+            raise HTTPException(
+                status_code=400,
+                detail="Either image_id or image_name must be provided, not both",
+            )
+        case _:
+            logger.error("Unexpected error; id=%s, name=%s", image_id, image_name)
+            raise HTTPException(status_code=500, detail="Unexpected error")
+
     try:
-        podman_client.images.remove(image=image_name, force=force)
+        podman_client.images.remove(image=identifier, force=force)
+        logger.info("Image %s deleted successfully", identifier)
         return None
     except ImageNotFound:
+        logger.exception("Image not found")
         raise HTTPException(status_code=404, detail=f"Image {image_name} not found")
     except APIError as e:
-        raise HTTPException(status_code=500, detail=f"Error deleting image: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        if e.status_code == 409:
+            logger.exception("Image is in use by a container")
+            raise HTTPException(status_code=409, detail=e.explanation)
+        else:
+            logger.exception("Error deleting image")
+            raise HTTPException(status_code=500, detail="Error deleting image")
+    except Exception:
+        logger.exception("Unexpected error")
+        raise HTTPException(status_code=500, detail="Unexpected error")
