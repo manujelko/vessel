@@ -1,13 +1,11 @@
-import datetime as dt
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from podman import PodmanClient
 from podman.errors import APIError, ImageNotFound
 
 from app.dependencies import get_podman_client
-from app.models import Image
 
 logger = logging.getLogger(__name__)
 
@@ -17,29 +15,12 @@ router = APIRouter(prefix="/images", tags=["images"])
 @router.get("")
 def get_images(
     podman_client: Annotated[PodmanClient, Depends(get_podman_client)],
-) -> list[Image]:
+) -> list[dict[str, Any]]:
     """Get a list of all images."""
     results = []
     for image in podman_client.images.list():
         attrs = image.attrs
-        image_model = Image(
-            id=attrs["Id"],
-            parent_id=attrs.get("ParentId"),
-            repo_tags=attrs.get("RepoTags", []),
-            created=dt.datetime.fromtimestamp(attrs["Created"]),
-            size=attrs["Size"],
-            shared_size=attrs.get("SharedSize"),
-            virtual_size=attrs.get("VirtualSize"),
-            labels=attrs.get("Labels"),
-            containers=attrs.get("Containers"),
-            architecture=attrs.get("Arch"),
-            os=attrs.get("Os"),
-            digest=attrs.get("Digest"),
-            history=attrs.get("History"),
-            is_manifest_list=attrs.get("IsManifestList"),
-            names=attrs.get("Names"),
-        )
-        results.append(image_model)
+        results.append(attrs)
     return results
 
 
