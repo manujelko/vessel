@@ -4,7 +4,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from podman import PodmanClient
-from podman.errors import APIError, ContainerError, ImageNotFound
+from podman.errors import APIError, ContainerError, ImageNotFound, NotFound
 
 from app.dependencies import get_podman_client
 
@@ -390,3 +390,37 @@ def run_container(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+
+@router.delete("/{container_id}", status_code=204)
+def delete_container(
+    container_id: str,
+    podman_client: Annotated[PodmanClient, Depends(get_podman_client)],
+    force: bool = Query(False, description="Force removal of a running container"),
+) -> None:
+    """
+    Delete a container by ID or name.
+
+    If the container is running, use `force=true` to forcibly remove it.
+
+    Returns:
+        HTTP 204 No Content on success.
+    """
+    try:
+        container = podman_client.containers.get(container_id)
+        container.remove(force=force)
+    except NotFound:
+        raise HTTPException(
+            status_code=404, detail=f"Container {container_id} not found"
+        )
+    except APIError as e:
+        logger.exception("Error deleting container")
+        if e.status_code == 409:
+            raise HTTPException(status_code=409, detail=e.explanation)
+        raise HTTPException(
+            status_code=500,
+            detail="Error deleting container. Consider using force=True.",
+        )
+    except Exception:
+        logger.exception("Unexpected error while deleting container")
+        raise HTTPException(status_code=500, detail="Unexpected error")

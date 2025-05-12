@@ -1,7 +1,8 @@
 from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
-from podman.errors import APIError, ContainerError, ImageNotFound
+from podman.errors import APIError, ContainerError, ImageNotFound, NotFound
+from requests.models import Response
 
 from app.dependencies import get_podman_client
 from app.main import app
@@ -520,4 +521,100 @@ def test_run_container_with_all_options() -> None:
         assert call_args["restart_policy"] == {"Name": "always"}
     finally:
         # Clean up the dependency override
+        app.dependency_overrides.pop(get_podman_client)
+
+
+def test_delete_container_success():
+    container = MagicMock()
+    container.remove.return_value = None
+
+    mock_client = MagicMock()
+    mock_client.containers.get.return_value = container
+
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+    try:
+        response = client.delete("/api/containers/mycontainer")
+        assert response.status_code == 204
+        container.remove.assert_called_once_with(force=False)
+    finally:
+        app.dependency_overrides.pop(get_podman_client)
+
+
+def test_delete_container_force():
+    container = MagicMock()
+    container.remove.return_value = None
+
+    mock_client = MagicMock()
+    mock_client.containers.get.return_value = container
+
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+    try:
+        response = client.delete("/api/containers/mycontainer?force=true")
+        assert response.status_code == 204
+        container.remove.assert_called_once_with(force=True)
+    finally:
+        app.dependency_overrides.pop(get_podman_client)
+
+
+def test_delete_container_not_found():
+    mock_client = MagicMock()
+    mock_client.containers.get.side_effect = NotFound("not found")
+
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+    try:
+        response = client.delete("/api/containers/missing")
+        assert response.status_code == 404
+        assert "not found" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(get_podman_client)
+
+
+def test_delete_container_conflict():
+    container = MagicMock()
+    response_ = Response()
+    response_.status_code = 409
+    error = APIError("conflict", response=response_, explanation="Container is in use")
+    container.remove.side_effect = error
+
+    mock_client = MagicMock()
+    mock_client.containers.get.return_value = container
+
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+    try:
+        response = client.delete("/api/containers/locked")
+        assert response.status_code == 409
+        assert "Container is in use" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(get_podman_client)
+
+
+def test_delete_container_api_error():
+    container = MagicMock()
+    container.remove.side_effect = APIError("server error")
+
+    mock_client = MagicMock()
+    mock_client.containers.get.return_value = container
+
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+    try:
+        response = client.delete("/api/containers/broken")
+        assert response.status_code == 500
+        assert "Error deleting container" in response.json()["detail"]
+    finally:
+        app.dependency_overrides.pop(get_podman_client)
+
+
+def test_delete_container_unexpected_exception():
+    container = MagicMock()
+    container.remove.side_effect = Exception("unexpected")
+
+    mock_client = MagicMock()
+    mock_client.containers.get.return_value = container
+
+    app.dependency_overrides[get_podman_client] = lambda: mock_client
+    try:
+        response = client.delete("/api/containers/error")
+        assert response.status_code == 500
+        assert "Unexpected error" in response.json()["detail"]
+    finally:
         app.dependency_overrides.pop(get_podman_client)
