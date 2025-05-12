@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routers import containers, images, info, login, logs, volumes
+from app.routers import containers, images, info, login, logs, pods, volumes
 
 app = FastAPI(
     title="Podman API",
@@ -13,3 +13,4 @@ app.include_router(router=containers.router, prefix="/api")
 app.include_router(router=info.router, prefix="/api")
 app.include_router(router=logs.router, prefix="/api")
 app.include_router(router=volumes.router, prefix="/api")
+app.include_router(router=pods.router, prefix="/api")
