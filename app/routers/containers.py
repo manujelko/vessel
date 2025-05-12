@@ -1,3 +1,5 @@
+import logging
+from enum import Enum
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
@@ -6,86 +8,80 @@ from podman.errors import APIError, ContainerError, ImageNotFound
 
 from app.dependencies import get_podman_client
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/containers", tags=["containers"])
 
 
-@router.get("/list")
+class Status(str, Enum):
+    created = "created"
+    initialized = "initialized"
+    running = "running"
+    paused = "paused"
+    exited = "exited"
+    unknown = "unknown"
+
+
+@router.get("")
 def list_containers(
     podman_client: Annotated[PodmanClient, Depends(get_podman_client)],
-    all: bool = Query(False, description="Show all containers, including stopped ones"),
-    limit: int | None = Query(
-        None, description="Limit the number of containers returned"
-    ),
-    status: str | None = Query(
-        None, description="Filter by container status (running, exited, etc.)"
-    ),
-    name: str | None = Query(None, description="Filter by container name"),
-    id: str | None = Query(None, description="Filter by container ID"),
-    ancestor: str | None = Query(
-        None, description="Filter by container ancestor (image name)"
-    ),
+    all_: Annotated[
+        bool, Query(alias="all", description="If False, only show running containers")
+    ] = False,
+    since: Annotated[
+        str | None,
+        Query(description="Show containers created after container name or id given."),
+    ] = None,
+    before: Annotated[
+        str | None,
+        Query(description="Show containers created before container name or id given."),
+    ] = None,
+    limit: Annotated[int, Query(description="Show last N created containers.")] = 0,
+    status: Annotated[
+        Status | None, Query(description="Show only containers with this status")
+    ] = None,
+    exited: Annotated[
+        int | None, Query(description="Show only containers with this exit code")
+    ] = None,
+    id_: Annotated[
+        str | None, Query(alias="id", description="Show only container with this id")
+    ] = None,
+    name: Annotated[
+        str | None, Query(description="Show only container with this name")
+    ] = None,
 ) -> list[dict[str, Any]]:
-    """
-    List containers.
+    """List containers."""
+    filters: dict[str, Any] = {}
 
-    This endpoint returns a list of containers. By default, only running containers are shown.
-    Use the `all` parameter to show all containers, including stopped ones.
+    if status is not None:
+        filters["status"] = status.value
+    if exited is not None:
+        filters["exited"] = exited
+    if id_ is not None:
+        filters["id"] = id_
+    if name is not None:
+        filters["name"] = name
 
-    Example:
-    ```
-    GET /api/containers/list?all=true
-    ```
-
-    You can filter the results using query parameters:
-    ```
-    GET /api/containers/list?status=running
-    GET /api/containers/list?name=my-container
-    GET /api/containers/list?ancestor=nginx:latest
-    ```
-
-    Returns a list of container objects with their details.
-    """
     try:
-        # Prepare kwargs for the list method
-        kwargs: dict[str, Any] = {"all": all}
-
-        if limit is not None:
-            kwargs["limit"] = limit
-
-        # Build filters dictionary from individual filter parameters
-        filters: dict[str, Any] = {}
-        if status is not None:
-            filters["status"] = status
-        if name is not None:
-            filters["name"] = name
-        if id is not None:
-            filters["id"] = id
-        if ancestor is not None:
-            filters["ancestor"] = ancestor
-
-        if filters:
-            kwargs["filters"] = filters
-
-        # Get the list of containers
-        # Get the containers manager and call its list method
-        containers = podman_client.containers.list(**kwargs)
-
-        # Convert container objects to dictionaries
-        container_list = []
-        for container in containers:
-            container_attrs = container.attrs
-            container_list.append(container_attrs)
-        return container_list
-
-    except APIError as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error listing containers: {str(e)}"
+        containers = podman_client.containers.list(
+            all=all_,
+            since=since,
+            before=before,
+            limit=limit,
+            filters=filters,
         )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+    except APIError:
+        logger.exception("Error listing containers")
+        raise HTTPException(status_code=500, detail="Error listing containers")
+
+    results = []
+    for container in containers:
+        attrs = container.attrs
+        results.append(attrs)
+    return results
 
 
-@router.post("/run")
+@router.post("")
 def run_container(
     podman_client: Annotated[PodmanClient, Depends(get_podman_client)],
     image_name: str = Body(..., description="Image name to run"),

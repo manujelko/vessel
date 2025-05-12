@@ -41,7 +41,7 @@ def test_list_containers() -> None:
 
     try:
         # Make the request to the endpoint
-        response = client.get("/api/containers/list?all=true")
+        response = client.get("/api/containers?all=true")
 
         # Verify the response
         assert response.status_code == 200
@@ -65,7 +65,9 @@ def test_list_containers() -> None:
         assert containers[1]["labels"] == {"app": "util"}
 
         # Verify that the mock was called correctly
-        mock_client.containers.list.assert_called_with(all=True)
+        mock_client.containers.list.assert_called_with(
+            all=True, since=None, before=None, limit=0, filters={}
+        )
     finally:
         # Clean up the dependency override
         app.dependency_overrides.pop(get_podman_client)
@@ -93,7 +95,7 @@ def test_list_containers_with_limit() -> None:
 
     try:
         # Make the request to the endpoint with limit parameter
-        response = client.get("/api/containers/list?limit=1")
+        response = client.get("/api/containers?limit=1")
 
         # Verify the response
         assert response.status_code == 200
@@ -105,7 +107,9 @@ def test_list_containers_with_limit() -> None:
         assert containers[0]["name"] == "test-container"
 
         # Verify that the mock was called correctly with limit parameter
-        mock_client.containers.list.assert_called_with(all=False, limit=1)
+        mock_client.containers.list.assert_called_with(
+            all=False, since=None, limit=1, before=None, filters={}
+        )
     finally:
         # Clean up the dependency override
         app.dependency_overrides.pop(get_podman_client)
@@ -133,7 +137,7 @@ def test_list_containers_with_filters() -> None:
 
     try:
         # Make the request to the endpoint with status filter
-        response = client.get("/api/containers/list?status=running")
+        response = client.get("/api/containers?status=running")
 
         # Verify the response
         assert response.status_code == 200
@@ -146,7 +150,7 @@ def test_list_containers_with_filters() -> None:
 
         # Verify that the mock was called correctly with filters parameter
         mock_client.containers.list.assert_called_with(
-            all=False, filters={"status": "running"}
+            all=False, since=None, before=None, limit=0, filters={"status": "running"}
         )
     finally:
         # Clean up the dependency override
@@ -164,7 +168,7 @@ def test_list_containers_empty() -> None:
 
     try:
         # Make the request to the endpoint
-        response = client.get("/api/containers/list")
+        response = client.get("/api/containers")
 
         # Verify the response
         assert response.status_code == 200
@@ -173,7 +177,9 @@ def test_list_containers_empty() -> None:
         assert containers == []
 
         # Verify that the mock was called correctly
-        mock_client.containers.list.assert_called_with(all=False)
+        mock_client.containers.list.assert_called_with(
+            all=False, since=None, before=None, limit=0, filters={}
+        )
     finally:
         # Clean up the dependency override
         app.dependency_overrides.pop(get_podman_client)
@@ -190,14 +196,16 @@ def test_list_containers_api_error() -> None:
 
     try:
         # Make the request to the endpoint
-        response = client.get("/api/containers/list")
+        response = client.get("/api/containers")
 
         # Verify the response
         assert response.status_code == 500
         assert "Error listing containers" in response.json()["detail"]
 
         # Verify that the mock was called correctly
-        mock_client.containers.list.assert_called_with(all=False)
+        mock_client.containers.list.assert_called_with(
+            all=False, since=None, before=None, limit=0, filters={}
+        )
     finally:
         # Clean up the dependency override
         app.dependency_overrides.pop(get_podman_client)
@@ -219,7 +227,7 @@ def test_run_container_detached() -> None:
     try:
         # Make the request to the endpoint
         response = client.post(
-            "/api/containers/run",
+            "/api/containers",
             json={
                 "image_name": "nginx:latest",
                 "detach": True,
@@ -263,7 +271,7 @@ def test_run_container_with_command() -> None:
     try:
         # Make the request to the endpoint
         response = client.post(
-            "/api/containers/run",
+            "/api/containers",
             json={
                 "image_name": "alpine:latest",
                 "command": ["echo", "Hello, World!"],
@@ -304,7 +312,7 @@ def test_run_container_with_environment_and_volumes() -> None:
     try:
         # Make the request to the endpoint
         response = client.post(
-            "/api/containers/run",
+            "/api/containers",
             json={
                 "image_name": "postgres:13",
                 "environment": {"POSTGRES_PASSWORD": "mysecretpassword"},
@@ -346,7 +354,7 @@ def test_run_container_image_not_found() -> None:
     try:
         # Make the request to the endpoint
         response = client.post(
-            "/api/containers/run",
+            "/api/containers",
             json={
                 "image_name": "nonexistent:latest",
             },
@@ -391,7 +399,7 @@ def test_run_container_error() -> None:
     try:
         # Make the request to the endpoint
         response = client.post(
-            "/api/containers/run",
+            "/api/containers",
             json={
                 "image_name": "alpine:latest",
                 "command": ["echo", "test"],
@@ -425,7 +433,7 @@ def test_run_container_api_error() -> None:
     try:
         # Make the request to the endpoint
         response = client.post(
-            "/api/containers/run",
+            "/api/containers",
             json={
                 "image_name": "nginx:latest",
             },
@@ -462,7 +470,7 @@ def test_run_container_with_all_options() -> None:
     try:
         # Make the request to the endpoint with many options
         response = client.post(
-            "/api/containers/run",
+            "/api/containers",
             json={
                 "image_name": "nginx:latest",
                 "container_name": "full-options-container",
